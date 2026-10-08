@@ -1,0 +1,13 @@
+Kreditrechner für GitHub Pages
+
+1. ZIP in der Dateien-App öffnen (antippen) – es entsteht der Ordner "kreditrechner".
+2. Auf github.com in dein Repository (z. B. das vom Haushaltsbuch) gehen.
+3. "Add file" → "Upload files" → ALLE Dateien aus dem Ordner auswählen
+   (index.html, manifest.webmanifest, sw.js, apple-touch-icon.png, icon-192.png, icon-512.png).
+   Tipp: Beim Hochladen als Ordnername "kreditrechner/" voranstellen, damit es neben dem Haushaltsbuch liegt.
+4. "Commit changes". Nach ca. 1 Minute erreichbar unter:
+   https://DEINNAME.github.io/REPOSITORY/kreditrechner/
+5. In Safari öffnen → Teilen → "Zum Home-Bildschirm".
+
+Deine Kreditdaten stehen NICHT in diesen Dateien. Sie liegen nur in deinem Browser
+(Zwischenspeicher) und in deinen verschlüsselten Sicherungsdateien.
