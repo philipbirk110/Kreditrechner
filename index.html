@@ -1,0 +1,1286 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Haushaltsbuch</title>
+<meta name="theme-color" content="#0a756a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Haushaltsbuch">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Aufbau wie der Heizungstausch-Rechner: Ergebnis zuerst (Kernaussage, Monatsverlauf, Gruppen, Tabellen), danach alle Eingaben; ab 900px zwei Spalten. */
+:root {
+  --bg: #f2f5f6;
+  --surface: #ffffff;
+  --fg: #12202a;
+  --muted: #566874;
+  --line: #d8e0e4;
+  --save: #0a756a;
+  --salary: #b85c0a;
+  --pos: #17794a;
+  --neg: #b3261e;
+  --focus: #1b6fd1;
+  --override: #fbe9d7;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1419; --surface: #151e25; --fg: #e5edf1; --muted: #91a3ae; --line: #25353f;
+    --save: #3fc5b4; --salary: #f0a24c; --pos: #52c98a; --neg: #ff8a80; --focus: #6aa8f5; --override: #3a2a19;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1419; --surface: #151e25; --fg: #e5edf1; --muted: #91a3ae; --line: #25353f;
+  --save: #3fc5b4; --salary: #f0a24c; --pos: #52c98a; --neg: #ff8a80; --focus: #6aa8f5; --override: #3a2a19;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-inline: 16px; padding-block: 20px 48px;
+}
+.wrap { max-width: 1080px; margin-inline: auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 0; font-weight: 600; text-wrap: balance; }
+h2 { font-size: 1.05rem; margin: 0 0 12px; font-weight: 600; text-wrap: balance; }
+h3 { font-size: 0.78rem; margin: 0; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+h4 { font-size: 0.85rem; margin: 6px 0 0; font-weight: 600; }
+p { margin: 0; }
+.sub { color: var(--muted); margin-top: 4px; max-width: 65ch; }
+.cols { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .cols { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); } }
+.stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.card > h2 { margin: 0; }
+.verdict { font-size: 1.2rem; line-height: 1.35; font-weight: 600; text-wrap: balance; }
+.verdict-sub { color: var(--muted); margin-top: -6px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.fact span { display: block; font-size: 0.78rem; color: var(--muted); }
+.fact b { display: block; font-family: var(--font-mono); font-weight: 500; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.c-in { color: var(--pos); } .c-out { color: var(--neg); } .c-save { color: var(--save); } .c-free { color: var(--focus); } .c-neg { color: var(--neg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; }
+.chart { width: 100%; height: auto; display: block; }
+.chart text { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+.chart .grid { stroke: var(--line); stroke-width: 1; fill: none; }
+.chart .b-in { fill: var(--pos); } .chart .b-out { fill: var(--neg); } .chart .b-save { fill: var(--save); }
+.bars { display: flex; flex-direction: column; gap: 12px; }
+.bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }
+.bar-row span { font-size: 0.9rem; }
+.bar-row b { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.bar { grid-column: 1 / -1; height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 5px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
+th { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+tr.total td { font-weight: 600; border-top: 2px solid var(--line); }
+tr.cur td { background: var(--bg); }
+tr.cur td:first-child { background: var(--bg); }
+.foot { font-size: 0.8rem; color: var(--muted); max-width: 70ch; }
+
+/* Eingaben */
+input, select, button { font: inherit; color: var(--fg); }
+input[type=text], select { padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; min-width: 0; width: 100%; }
+input.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+input.override { background: var(--override); border-color: var(--salary); }
+input:focus-visible, button:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button { font-weight: 500; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 6px 8px; }
+button.ghost:hover { color: var(--fg); border-color: var(--line); }
+button.add { align-self: flex-start; color: var(--focus); border-style: dashed; }
+.card.tools { flex-direction: row; }
+.tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.filebtn { font-weight: 500; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.filebtn:hover { border-color: var(--muted); }
+.status { flex-basis: 100%; }
+.lock { min-height: 80vh; display: grid; place-items: center; }
+.lockbox { width: 100%; max-width: 340px; text-align: center; gap: 14px; }
+.lockbox input { font-family: var(--font-mono); font-size: 1.4rem; letter-spacing: 0.4em; text-align: center; padding: 12px; }
+.lockbox input { width: 100%; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; }
+.lockbox input::placeholder { letter-spacing: normal; font-size: 1rem; font-family: var(--font-body); color: var(--muted); }
+.lockbox button { background: var(--save); color: #fff; border-color: var(--save); padding: 12px; font-size: 1rem; }
+.lockerr { color: var(--neg); font-size: 0.9rem; min-height: 1.4em; }
+.dlg { position: fixed; inset: 0; background: rgba(13, 20, 25, 0.55); display: grid; place-items: center; padding: 16px; z-index: 20; }
+.dlg .lockbox input { letter-spacing: 0.1em; font-size: 1.1rem; }
+.lockbox button.ghost { background: transparent; color: var(--muted); border-color: transparent; padding: 6px; }
+.status.warn { color: var(--neg); font-weight: 500; }
+button.primary { background: var(--save); border-color: var(--save); color: var(--surface); }
+button.danger { color: var(--neg); }
+.rowbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+.restore { border-color: var(--salary); }
+.restore p { font-size: 0.92rem; }
+.keybox { flex-basis: 100%; background: var(--bg); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem; }
+.confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.9rem; background: var(--bg); padding: 8px 10px; border-radius: 6px; }
+.yearnav { display: flex; gap: 8px; align-items: center; }
+.yearnav select { width: auto; font-weight: 600; font-family: var(--font-mono); }
+.status { color: var(--muted); font-size: 0.8rem; }
+.note { font-size: 0.85rem; color: var(--muted); background: var(--bg); border-radius: 6px; padding: 8px 10px; }
+.sec-head { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.sec-head input.gname { font-weight: 600; font-size: 0.95rem; background: transparent; border-color: transparent; padding-inline: 0; }
+.sec-head input.gname:hover, .sec-head input.gname:focus { background: var(--bg); border-color: var(--line); padding-inline: 10px; }
+.sec-sum { font-family: var(--font-mono); font-size: 0.9rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.list { display: flex; flex-direction: column; }
+.pos { display: grid; gap: 6px 8px; padding-block: 10px; border-bottom: 1px solid var(--line);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: "name name" "m y" "sum tools" "months months"; align-items: center; }
+.pos:last-child { border-bottom: 0; }
+.pos .name { grid-area: name; }
+.pos .in-m { grid-area: m; } .pos .in-y { grid-area: y; }
+.pos .ptools { grid-area: tools; display: flex; gap: 2px; justify-self: end; }
+.pos .psum { grid-area: sum; font-size: 0.8rem; color: var(--muted); font-family: var(--font-mono); }
+.pos .months { grid-area: months; }
+@media (min-width: 560px) {
+  .pos { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "name m y tools" "sum sum sum sum" "months months months months"; }
+  .pos .ptools { justify-self: end; }
+}
+.inrow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.inrow span { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 10px; background: var(--bg); border-radius: 8px; }
+@media (min-width: 560px) { .months { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.months label { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); min-width: 0; }
+.months input[type=text], .months select { background: var(--surface); padding: 6px 8px; }
+.months .hint { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs button { padding: 6px 12px; font-size: 0.9rem; }
+.tabs button[aria-pressed=true] { border-color: var(--salary); color: var(--salary); background: var(--bg); }
+.vpanel { display: flex; flex-direction: column; gap: 8px; }
+.part { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.vtotal { display: flex; justify-content: space-between; font-weight: 600; padding-top: 8px; border-top: 2px solid var(--line); }
+.vtotal b { font-family: var(--font-mono); font-weight: 500; color: var(--salary); }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--fg); color: var(--surface); border-radius: 8px; padding: 10px 14px; display: flex; gap: 12px; align-items: center; font-size: 0.9rem; max-width: calc(100% - 32px); z-index: 10; }
+.toast button { background: transparent; color: inherit; border-color: currentColor; padding: 4px 10px; }
+details summary { cursor: pointer; font-weight: 600; font-size: 1.05rem; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+details summary::-webkit-details-marker { display: none; }
+details summary::after { content: "▾"; color: var(--muted); }
+details[open] summary::after { content: "▴"; }
+details[open] summary { margin-bottom: 12px; }
+</style>
+
+<div class="wrap" id="app">
+  <header>
+    <h1>Haushaltsbuch</h1>
+    <p class="sub">Beim Öffnen ist alles leer: Lade deine Sicherung, um weiterzumachen. Änderungen werden zwischendurch verschlüsselt zwischengespeichert, dauerhaft aufgehoben sind sie erst mit »Sicherung speichern«. Einnahmen, Ausgaben und Sparraten pro Jahr bis 2062. Feste Beträge trägst du pro Monat oder pro Jahr ein, schwankende direkt im Monat.</p>
+  </header>
+
+  <div class="tools card">
+    <div class="yearnav">
+      <button type="button" id="prevYear" aria-label="Vorjahr">‹</button>
+      <select id="year" aria-label="Jahr"></select>
+      <button type="button" id="nextYear" aria-label="Folgejahr">›</button>
+    </div>
+    <div class="actions">
+      <button type="button" id="exportXlsx">Excel exportieren</button>
+      <button type="button" id="backupSave">Sicherung speichern</button>
+      <label class="filebtn" for="backupLoad">Sicherung laden</label>
+      <input type="file" id="backupLoad" accept=".json,application/json" hidden>
+      <label class="filebtn" for="xlsxLoad">Excel importieren</label>
+      <input type="file" id="xlsxLoad" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+      <button type="button" id="keysBtn" aria-expanded="false" aria-controls="keyBox">Schlüssel</button>
+    </div>
+    <div class="keybox" id="keyBox" hidden></div>
+    <small class="status" id="status">Lädt …</small>
+  </div>
+
+  <section class="card restore" id="restoreBox" hidden>
+    <p><b>Daten vom letzten Mal gefunden</b><br><span id="restoreText"></span></p>
+    <div class="rowbtns" id="restoreBtns"><button type="button" class="primary" id="restoreYes">Wiederherstellen</button><button type="button" class="ghost" id="restoreNo">Verwerfen</button></div>
+    <div class="confirm" id="restoreAsk" hidden><span>Wirklich verwerfen? Das lässt sich nicht rückgängig machen.</span><button type="button" class="danger" id="restoreDrop">Verwerfen</button><button type="button" class="ghost" id="restoreKeep">Abbrechen</button></div>
+  </section>
+
+  <div class="cols">
+    <div class="stack" id="results">
+      <section class="card" aria-live="polite">
+        <p class="verdict" id="verdict"></p>
+        <p class="verdict-sub" id="verdictSub"></p>
+        <div class="facts" id="facts"></div>
+      </section>
+
+      <section class="card">
+        <h2>Monatsverlauf</h2>
+        <div class="legend">
+          <span><i style="background:var(--pos)"></i>Einnahmen</span>
+          <span><i style="background:var(--neg)"></i>Ausgaben</span>
+          <span><i style="background:var(--save)"></i>Sparen</span>
+        </div>
+        <div id="chart"></div>
+      </section>
+
+      <section class="card">
+        <h2>Wohin das Geld geht</h2>
+        <div class="bars" id="bars"></div>
+      </section>
+
+      <section class="card">
+        <h2>Monate im Detail</h2>
+        <div class="scroll"><table id="mtable"></table></div>
+      </section>
+
+      <section class="card">
+        <details id="yearsBox">
+          <summary><span>Alle Jahre bis 2062</span></summary>
+          <div class="scroll"><table id="ytable"></table></div>
+          <p class="foot" style="margin-top:10px">Jahre ohne eigene Einträge übernehmen Positionen und feste Beträge aus dem Vorjahr.</p>
+        </details>
+      </section>
+    </div>
+
+    <div class="stack" id="inputs"></div>
+  </div>
+
+  <p class="foot">Sparquote = Sparen ÷ Einnahmen. Übrig = Einnahmen − Ausgaben − Sparen. Ein Monatsfeld, das du selbst ausfüllst, ersetzt den automatisch verteilten Betrag für diesen Monat.</p>
+</div>
+<div class="dlg" id="codeDlg" hidden>
+  <form class="lockbox card" id="dlgForm" autocomplete="off">
+    <h2 id="dlgTitle">Sicherung</h2>
+    <p class="sub" id="dlgText"></p>
+    <input type="password" id="dlgCode1" placeholder="Sicherungscode" aria-label="Sicherungscode" autocomplete="off">
+    <input type="password" id="dlgCode2" placeholder="Sicherungscode wiederholen" aria-label="Sicherungscode wiederholen" autocomplete="off" hidden>
+    <button type="submit" id="dlgOk" class="primary">OK</button>
+    <button type="button" id="dlgCancel" class="ghost">Abbrechen</button>
+    <p class="lockerr" id="dlgErr" aria-live="polite"></p>
+  </form>
+</div>
+<div class="toast" id="toast" hidden><span id="toastText"></span><button type="button" id="undo">Rückgängig</button></div>
+
+<script>
+var Y0 = 2026, Y1 = 2062;
+var MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+var nf0 = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 });
+var nf2 = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+var nf1 = new Intl.NumberFormat("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+function eur(n) { return (n < 0 ? "−" : "") + nf0.format(Math.abs(Math.round(n))) + " €"; }
+function eur2(n) { return (n < 0 ? "−" : "") + nf2.format(Math.abs(n)) + " €"; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function uid() { return Math.random().toString(36).slice(2, 9); }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function parseNum(s) {
+  s = String(s).trim().replace(/[€\s]/g, "");
+  if (!s) return null;
+  if (s.indexOf(",") >= 0) s = s.replace(/\./g, "").replace(",", ".");
+  else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+  var v = parseFloat(s);
+  return isNaN(v) ? null : v;
+}
+function fmtIn(v) { return v == null ? "" : String(Math.round(v * 100) / 100).replace(".", ","); }
+function r2(v) { return Math.round(v * 100) / 100; }
+function normItem(it) {
+  if (!it) return;
+  if (it.m != null && it.y == null) it.y = r2(it.m * 12);
+  else if (it.y != null && it.m == null) it.m = r2(it.y / 12);
+}
+function normYear(d) {
+  normItem(d.salary); d.income.forEach(normItem); d.savings.forEach(normItem);
+  d.groups.forEach(function (g) { g.items.forEach(normItem); });
+}
+function sum(a) { return a.reduce(function (x, y) { return x + y; }, 0); }
+
+/* ---------- Datenmodell ---------- */
+function item(name) { return { id: uid(), name: name || "", m: null, y: null, o: {} }; }
+function defaultYear() {
+  function part(n) { return { id: uid(), name: n, v: null }; }
+  function parts() { return ["Grundgehalt (netto)", "Nachtzuschlag", "Sonntagszuschlag", "Feiertagszuschlag", "Schichtzulage"].map(part); }
+  function grp(n, items) { return { id: uid(), name: n, items: items.map(item) }; }
+  return {
+    salary: { m: null, y: null, o: {}, sel: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    variants: [{ name: "Regulär", parts: parts() }, { name: "Mit Frei", parts: parts() }, { name: "Urlaub", parts: parts() }],
+    income: ["Extra-Zuschläge / Sonderzahlung", "Nebenjob", "Mieteinnahmen", "Kindergeld"].map(item),
+    groups: [
+      grp("Wohnen", ["Miete / Kreditrate", "Nebenkosten", "Grundsteuer"]),
+      grp("Energie", ["Strom", "Heizung / Gas", "Wasser / Abwasser"]),
+      grp("Versicherungen", ["Privathaftpflicht", "Hausrat", "Wohngebäude", "KFZ-Versicherung", "Berufsunfähigkeit", "Rechtsschutz"]),
+      grp("Handy, Internet & Medien", ["Handyvertrag", "Internet / Festnetz", "Rundfunkbeitrag", "Streaming"]),
+      grp("Mobilität", ["Sprit", "KFZ-Steuer", "Werkstatt / Wartung", "Deutschlandticket"]),
+      grp("Lebensmittel & Haushalt", ["Lebensmittel", "Essen gehen", "Drogerie"]),
+      grp("Freizeit & Urlaub", ["Fitnessstudio", "Hobbys", "Urlaubsreise"]),
+      grp("Kredite & Raten", []),
+      grp("Sonstiges", ["Kleidung", "Geschenke"])
+    ],
+    savings: ["Sparkonto / Tagesgeld", "ETF-Sparplan", "Urlaubskonto", "Notgroschen", "Altersvorsorge"].map(item)
+  };
+}
+var saved = {};          // Jahr -> eigene Daten
+var derivedCache = {};
+function derive(y) {
+  if (saved[y]) return saved[y];
+  if (derivedCache[y]) return derivedCache[y];
+  var d;
+  if (y <= Y0) d = defaultYear();
+  else {
+    d = clone(derive(y - 1));
+    var strip = function (it) { it.o = {}; };
+    d.income.forEach(strip); d.savings.forEach(strip);
+    d.groups.forEach(function (g) { g.items.forEach(strip); });
+    d.salary.o = {}; d.salary.sel = d.salary.sel.map(function () { return 0; });
+  }
+  derivedCache[y] = d;
+  return d;
+}
+
+/* ---------- Rechnen ---------- */
+function itemMonths(it) {
+  return MON.map(function (_, i) {
+    var o = it.o && it.o[i];
+    if (o != null) return o;
+    if (it.y) return it.y / 12;
+    return it.m || 0;
+  });
+}
+function variantTotals(d) { return d.variants.map(function (v) { return sum(v.parts.map(function (p) { return p.v || 0; })); }); }
+function salaryMonths(d) {
+  var t = variantTotals(d), s = d.salary;
+  return MON.map(function (_, i) {
+    if (s.o && s.o[i] != null) return s.o[i];
+    var vt = t[s.sel[i]] || 0;
+    if (vt > 0) return vt;
+    if (s.y) return s.y / 12;
+    return s.m || 0;
+  });
+}
+function addInto(acc, arr) { for (var i = 0; i < 12; i++) acc[i] += arr[i]; return acc; }
+function zeros() { return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; }
+function compute(d) {
+  var inc = addInto(zeros(), salaryMonths(d));
+  d.income.forEach(function (it) { addInto(inc, itemMonths(it)); });
+  var out = zeros(), groups = d.groups.map(function (g) {
+    var gm = zeros(); g.items.forEach(function (it) { addInto(gm, itemMonths(it)); });
+    addInto(out, gm); return { name: g.name, total: sum(gm) };
+  });
+  var sav = zeros(); d.savings.forEach(function (it) { addInto(sav, itemMonths(it)); });
+  var free = inc.map(function (v, i) { return v - out[i] - sav[i]; });
+  var I = sum(inc), O = sum(out), S = sum(sav);
+  return { inc: inc, out: out, sav: sav, free: free, groups: groups, I: I, O: O, S: S, F: I - O - S, rate: I > 0 ? S / I : null };
+}
+
+/* ---------- Zustand ---------- */
+var year = Y0, cur = null;
+year = Math.min(Y1, Math.max(Y0, new Date().getFullYear()));
+
+function listFor(sec) {
+  if (sec === "inc") return cur.income;
+  if (sec === "sav") return cur.savings;
+  if (sec.indexOf("g:") === 0) { var g = cur.groups.find(function (x) { return x.id === sec.slice(2); }); return g ? g.items : null; }
+  return null;
+}
+function touch() {
+  if (!saved[year]) { saved[year] = cur; var n = document.getElementById("yearNote"); if (n) n.remove(); }
+  derivedCache = {};
+  scheduleSave(year);
+}
+
+/* ---------- Eingaben rendern ---------- */
+function posRow(sec, it) {
+  return '<div class="pos" data-sec="' + sec + '" data-id="' + it.id + '">' +
+    '<input type="text" class="name" data-f="name" value="' + esc(it.name) + '" placeholder="Bezeichnung" aria-label="Bezeichnung">' +
+    '<div class="inrow in-m"><input type="text" class="num" inputmode="decimal" data-f="m" value="' + fmtIn(it.m) + '" placeholder="0" aria-label="Betrag pro Monat"><span>€/Mon.</span></div>' +
+    '<div class="inrow in-y"><input type="text" class="num" inputmode="decimal" data-f="y" value="' + fmtIn(it.y) + '" placeholder="0" aria-label="Betrag pro Jahr"><span>€/Jahr</span></div>' +
+    '<div class="ptools"><button type="button" class="ghost" data-act="months" aria-expanded="false">Monate</button><button type="button" class="ghost" data-act="del" aria-label="Position löschen">✕</button></div>' +
+    '<div class="psum"></div>' +
+    '<div class="months" hidden>' + monthInputs(it) + '<p class="hint">Leer lassen = automatisch. Eigener Wert gilt nur für diesen Monat.</p></div>' +
+    "</div>";
+}
+function monthInputs(it) {
+  return MON.map(function (m, i) {
+    var v = it.o && it.o[i] != null ? it.o[i] : null;
+    return '<label>' + m + '<input type="text" class="num' + (v != null ? " override" : "") + '" inputmode="decimal" data-f="o" data-mi="' + i + '" value="' + fmtIn(v) + '"></label>';
+  }).join("");
+}
+function section(title, sec, items, sumId, addLabel, extraHead) {
+  return '<section class="card" data-block="' + sec + '">' +
+    '<div class="sec-head">' + (extraHead || '<h3>' + title + '</h3>') + '<span class="sec-sum" id="' + sumId + '"></span></div>' +
+    '<div class="list">' + items.map(function (it) { return posRow(sec, it); }).join("") + '</div>' +
+    '<button type="button" class="add" data-act="add" data-sec="' + sec + '">+ ' + addLabel + '</button></section>';
+}
+var vTab = 0;
+function salaryCard() {
+  var s = cur.salary;
+  var tabs = cur.variants.map(function (v, i) {
+    return '<button type="button" data-act="vtab" data-vi="' + i + '" aria-pressed="' + (i === vTab) + '">' + esc(v.name || "Variante " + (i + 1)) + "</button>";
+  }).join("");
+  var v = cur.variants[vTab];
+  var parts = v.parts.map(function (p) {
+    return '<div class="part" data-pid="' + p.id + '"><input type="text" data-f="pname" value="' + esc(p.name) + '" placeholder="Bestandteil" aria-label="Bestandteil">' +
+      '<div class="inrow"><input type="text" class="num" inputmode="decimal" data-f="pv" value="' + fmtIn(p.v) + '" placeholder="0" aria-label="Betrag"><span>€</span></div>' +
+      '<button type="button" class="ghost" data-act="delpart" aria-label="Bestandteil löschen">✕</button></div>';
+  }).join("");
+  var opts = function (sel) {
+    return cur.variants.map(function (vv, i) { return '<option value="' + i + '"' + (i === sel ? " selected" : "") + ">" + esc(vv.name || "Variante " + (i + 1)) + "</option>"; }).join("");
+  };
+  var sels = MON.map(function (m, i) { return '<label>' + m + '<select data-f="sel" data-mi="' + i + '" class="vsel">' + opts(s.sel[i]) + "</select></label>"; }).join("");
+  return '<section class="card" id="salaryCard">' +
+    '<div class="sec-head"><h3>Gehalt</h3><span class="sec-sum" id="sumSalary"></span></div>' +
+    '<div class="list"><div class="pos" data-sec="salary" data-id="salary">' +
+      '<input type="text" class="name" value="Festes Gehalt (netto)" disabled aria-label="Bezeichnung">' +
+      '<div class="inrow in-m"><input type="text" class="num" inputmode="decimal" data-f="m" value="' + fmtIn(s.m) + '" placeholder="0" aria-label="Gehalt pro Monat"><span>€/Mon.</span></div>' +
+      '<div class="inrow in-y"><input type="text" class="num" inputmode="decimal" data-f="y" value="' + fmtIn(s.y) + '" placeholder="0" aria-label="Gehalt pro Jahr"><span>€/Jahr</span></div>' +
+      '<div class="ptools"><button type="button" class="ghost" data-act="months" aria-expanded="false">Monate</button></div>' +
+      '<div class="psum"></div>' +
+      '<div class="months" hidden>' + monthInputs(s) + '<p class="hint">Leer lassen = automatisch. Eigener Wert gilt nur für diesen Monat.</p></div>' +
+    "</div></div>" +
+    '<h4>Gehalt-Varianten</h4><p class="foot">Für Monate mit unterschiedlichen Zuschlägen. Sobald eine Variante Beträge hat, ersetzt sie in den gewählten Monaten das feste Gehalt.</p>' +
+    '<div class="tabs" id="vtabs">' + tabs + "</div>" +
+    '<div class="vpanel"><input type="text" data-f="vname" value="' + esc(v.name) + '" aria-label="Name der Variante">' + parts +
+    '<button type="button" class="add" data-act="addpart">+ Zuschlag hinzufügen</button>' +
+    '<div class="vtotal"><span>Auszahlung</span><b id="vtotal"></b></div></div>' +
+    '<h4>Variante je Monat</h4><div class="months">' + sels + "</div></section>";
+}
+function renderInputs() {
+  var root = document.getElementById("inputs");
+  var note = saved[year] ? "" : '<p class="note" id="yearNote">' + (year === Y0 ? "Noch nichts eingetragen. Fang mit deinem Gehalt an." :
+    "Für " + year + " gibt es noch keine eigenen Einträge. Angezeigt werden die festen Beträge aus " + (year - 1) + ". Sobald du etwas änderst, wird " + year + " eigenständig gespeichert.") + "</p>";
+  var html = note + salaryCard() +
+    section("Weitere Einnahmen", "inc", cur.income, "sumInc", "Einnahme hinzufügen") +
+    cur.groups.map(function (g) {
+      return section("", "g:" + g.id, g.items, "sumG_" + g.id, "Position hinzufügen",
+        '<input type="text" class="gname" data-f="gname" data-gid="' + g.id + '" value="' + esc(g.name) + '" aria-label="Name der Gruppe">' +
+        '<button type="button" class="ghost" data-act="delgroup" data-gid="' + g.id + '" aria-label="Gruppe löschen">✕</button>');
+    }).join("") +
+    '<button type="button" class="add" data-act="addgroup">+ Ausgaben-Gruppe hinzufügen</button>' +
+    section("Sparen & Investieren", "sav", cur.savings, "sumSav", "Sparziel hinzufügen");
+  root.innerHTML = html;
+  // Überschriften für Ausgaben
+  var first = root.querySelector('[data-block^="g:"]');
+  if (first) { var h = document.createElement("h2"); h.textContent = "Ausgaben"; h.style.margin = "4px 0 -8px"; root.insertBefore(h, first); }
+  refreshInputs();
+}
+function refreshInputs() {
+  var root = document.getElementById("inputs");
+  root.querySelectorAll(".pos").forEach(function (row) {
+    var sec = row.dataset.sec, it;
+    var months;
+    if (sec === "salary") { months = salaryMonths(cur); it = cur.salary; }
+    else { var l = listFor(sec); it = l && l.find(function (x) { return x.id === row.dataset.id; }); if (!it) return; months = itemMonths(it); }
+    var tot = sum(months);
+    var ov = Object.keys(it.o || {}).length;
+    row.querySelector(".psum").textContent = tot ? "Jahr " + eur2(tot) + " · Ø " + eur2(tot / 12) + (ov ? " · " + ov + " Monat" + (ov > 1 ? "e" : "") + " angepasst" : "") : "";
+    var mp = row.querySelector(".months");
+    if (!mp.hidden) mp.querySelectorAll('input[data-f="o"]').forEach(function (inp) {
+      var i = +inp.dataset.mi; inp.placeholder = nf2.format(months[i]);
+    });
+  });
+  var setSum = function (id, v) { var el = document.getElementById(id); if (el) el.textContent = eur(v) + " / Jahr"; };
+  setSum("sumSalary", sum(salaryMonths(cur)));
+  setSum("sumInc", sum(cur.income.map(function (it) { return sum(itemMonths(it)); })));
+  setSum("sumSav", sum(cur.savings.map(function (it) { return sum(itemMonths(it)); })));
+  cur.groups.forEach(function (g) { setSum("sumG_" + g.id, sum(g.items.map(function (it) { return sum(itemMonths(it)); }))); });
+  var vt = document.getElementById("vtotal"); if (vt) vt.textContent = eur2(variantTotals(cur)[vTab]);
+}
+
+/* ---------- Ergebnis rendern ---------- */
+function niceTicks(max, count) {
+  max = max || 1;
+  var raw = max / count, mag = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), norm = raw / mag;
+  var step = (norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10) * mag, out = [];
+  for (var v = 0; v <= max + step * 0.5; v += step) out.push(Math.round(v));
+  return out;
+}
+function drawChart(r) {
+  var box = document.getElementById("chart"), W = Math.max(320, Math.round(box.clientWidth || 640)), H = Math.round(Math.min(280, Math.max(200, W * 0.45))), ml = 52, mr = 8, mt = 12, mb = 26;
+  var hi = Math.max.apply(null, r.inc.concat(r.out.map(function (v, i) { return v + r.sav[i]; })));
+  var ticks = niceTicks(hi, 4), yMax = ticks[ticks.length - 1] || 1;
+  function Y(v) { return mt + (1 - v / yMax) * (H - mt - mb); }
+  var slot = (W - ml - mr) / 12, bw = Math.min(16, slot * 0.32);
+  var s = '<svg class="chart" viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Einnahmen, Ausgaben und Sparen je Monat ' + year + '">';
+  ticks.forEach(function (t) {
+    s += '<line class="grid" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + Y(t).toFixed(1) + '" y2="' + Y(t).toFixed(1) + '"/>';
+    s += '<text x="' + (ml - 8) + '" y="' + (Y(t) + 4).toFixed(1) + '" text-anchor="end">' + (t >= 1000 ? nf1.format(t / 1000).replace(",0", "") + " T€" : t + " €") + "</text>";
+  });
+  for (var i = 0; i < 12; i++) {
+    var cx = ml + slot * (i + 0.5);
+    var x1 = cx - bw - 1, x2 = cx + 1;
+    if (r.inc[i] > 0) s += '<rect class="b-in" x="' + x1.toFixed(1) + '" y="' + Y(r.inc[i]).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (Y(0) - Y(r.inc[i])).toFixed(1) + '" rx="2"/>';
+    if (r.out[i] > 0) s += '<rect class="b-out" x="' + x2.toFixed(1) + '" y="' + Y(r.out[i]).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (Y(0) - Y(r.out[i])).toFixed(1) + '"/>';
+    if (r.sav[i] > 0) s += '<rect class="b-save" x="' + x2.toFixed(1) + '" y="' + Y(r.out[i] + r.sav[i]).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + (Y(r.out[i]) - Y(r.out[i] + r.sav[i])).toFixed(1) + '"/>';
+    s += '<text x="' + cx.toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + MON[i] + "</text>";
+  }
+  s += "</svg>";
+  document.getElementById("chart").innerHTML = s;
+}
+function renderResults() {
+  var r = compute(cur);
+  var v = document.getElementById("verdict"), vs = document.getElementById("verdictSub");
+  if (r.I <= 0) {
+    v.textContent = "Trag dein Gehalt und deine festen Kosten ein, dann siehst du hier, was " + year + " übrig bleibt.";
+    vs.textContent = "Beträge kannst du pro Monat oder pro Jahr eintragen.";
+  } else if (r.F < 0) {
+    v.textContent = year + " fehlen dir im Schnitt " + eur(-r.F / 12) + " pro Monat.";
+    vs.textContent = "Ausgaben und Sparraten liegen zusammen " + eur(-r.F) + " über deinen Einnahmen.";
+  } else {
+    v.textContent = year + " legst du " + nf1.format(r.rate * 100) + " % deiner Einnahmen zur Seite.";
+    vs.textContent = "Nach Ausgaben und Sparen bleiben im Schnitt " + eur(r.F / 12) + " pro Monat übrig.";
+  }
+  var facts = [["Einnahmen " + year, eur(r.I), "c-in"], ["Ausgaben", eur(r.O), "c-out"], ["Gespart", eur(r.S), "c-save"],
+    ["Übrig", eur(r.F), r.F < 0 ? "c-neg" : "c-free"], ["Sparquote", r.rate == null ? "–" : nf1.format(r.rate * 100) + " %", "c-save"], ["Ø übrig / Monat", eur(r.F / 12), r.F < 0 ? "c-neg" : "c-free"]];
+  document.getElementById("facts").innerHTML = facts.map(function (f) { return '<div class="fact"><span>' + f[0] + '</span><b class="' + f[2] + '">' + f[1] + "</b></div>"; }).join("");
+  drawChart(r);
+
+  var rows = r.groups.filter(function (g) { return g.total > 0; }).sort(function (a, b) { return b.total - a.total; })
+    .map(function (g) { return [g.name, g.total, "var(--neg)"]; });
+  if (r.S > 0) rows.push(["Sparen & Investieren", r.S, "var(--save)"]);
+  var mx = Math.max.apply(null, rows.map(function (x) { return x[1]; }).concat([1]));
+  document.getElementById("bars").innerHTML = rows.length ? rows.map(function (x) {
+    return '<div class="bar-row"><span>' + esc(x[0]) + "</span><b>" + eur(x[1]) + ' <small class="status">' + eur(x[1] / 12) + '/Mon.</small></b><div class="bar"><i style="width:' + (x[1] / mx * 100).toFixed(1) + "%;background:" + x[2] + '"></i></div></div>';
+  }).join("") : '<p class="foot">Sobald du Ausgaben einträgst, erscheinen hier deine größten Posten.</p>';
+
+  var head = "<tr><th></th>" + MON.map(function (m) { return "<th>" + m + "</th>"; }).join("") + "<th>Jahr</th></tr>";
+  function line(label, arr, cls, total) {
+    return '<tr' + (total ? ' class="total"' : "") + '><td class="' + cls + '">' + label + "</td>" + arr.map(function (x) { return '<td class="num">' + eur(x) + "</td>"; }).join("") + '<td class="num"><b>' + eur(sum(arr)) + "</b></td></tr>";
+  }
+  var rate = r.inc.map(function (x, i) { return x > 0 ? nf1.format(r.sav[i] / x * 100) + " %" : "–"; });
+  document.getElementById("mtable").innerHTML = head + line("Einnahmen", r.inc, "c-in") + line("Ausgaben", r.out, "c-out") + line("Sparen", r.sav, "c-save") + line("Übrig", r.free, "c-free", true) +
+    '<tr><td>Sparquote</td>' + rate.map(function (x) { return '<td class="num">' + x + "</td>"; }).join("") + '<td class="num"><b>' + (r.rate == null ? "–" : nf1.format(r.rate * 100) + " %") + "</b></td></tr>";
+
+  var yh = "<tr><th>Jahr</th><th>Einnahmen</th><th>Ausgaben</th><th>Gespart</th><th>Übrig</th><th>Quote</th><th>Gespart gesamt</th></tr>", cum = 0, yb = "";
+  for (var y = Y0; y <= Y1; y++) {
+    var rr = y === year ? r : compute(derive(y)); cum += rr.S;
+    yb += '<tr' + (y === year ? ' class="cur"' : "") + '><td><button type="button" class="ghost" data-goto="' + y + '" style="font-family:var(--font-mono);color:var(--focus)">' + y + (saved[y] ? "" : " ·") + "</button></td>" +
+      '<td class="num">' + eur(rr.I) + '</td><td class="num">' + eur(rr.O) + '</td><td class="num c-save">' + eur(rr.S) + '</td><td class="num ' + (rr.F < 0 ? "c-neg" : "") + '">' + eur(rr.F) +
+      '</td><td class="num">' + (rr.rate == null ? "–" : nf1.format(rr.rate * 100) + " %") + '</td><td class="num">' + eur(cum) + "</td></tr>";
+  }
+  document.getElementById("ytable").innerHTML = yh + yb;
+}
+
+/* ---------- Ereignisse ---------- */
+var inputsEl = document.getElementById("inputs");
+inputsEl.addEventListener("input", function (e) {
+  var t = e.target, f = t.dataset.f; if (!f) return;
+  if (f === "gname") { var g = cur.groups.find(function (x) { return x.id === t.dataset.gid; }); g.name = t.value; }
+  else if (f === "vname") {
+    cur.variants[vTab].name = t.value;
+    var lbl = t.value || "Variante " + (vTab + 1);
+    document.querySelector('#vtabs [data-vi="' + vTab + '"]').textContent = lbl;
+    document.querySelectorAll(".vsel").forEach(function (s) { s.options[vTab].textContent = lbl; });
+  }
+  else if (f === "pname" || f === "pv") {
+    var p = cur.variants[vTab].parts.find(function (x) { return x.id === t.closest(".part").dataset.pid; });
+    if (f === "pname") p.name = t.value; else p.v = parseNum(t.value);
+  }
+  else if (f === "sel") { cur.salary.sel[+t.dataset.mi] = +t.value; }
+  else {
+    var row = t.closest(".pos"); if (!row) return;
+    var it = row.dataset.sec === "salary" ? cur.salary : listFor(row.dataset.sec).find(function (x) { return x.id === row.dataset.id; });
+    if (f === "name") it.name = t.value;
+    else if (f === "m" || f === "y") {
+      var nv = parseNum(t.value);
+      if (f === "m") { it.m = nv; it.y = nv == null ? null : r2(nv * 12); }
+      else { it.y = nv; it.m = nv == null ? null : r2(nv / 12); }
+      var other = row.querySelector('[data-f="' + (f === "m" ? "y" : "m") + '"]');
+      if (other) other.value = fmtIn(f === "m" ? it.y : it.m);
+    }
+    else if (f === "o") {
+      var v = parseNum(t.value), i = +t.dataset.mi;
+      if (v == null) delete it.o[i]; else it.o[i] = v;
+      t.classList.toggle("override", v != null);
+    }
+  }
+  touch(); refreshInputs(); renderResults();
+});
+inputsEl.addEventListener("change", function (e) { if (e.target.dataset.f === "sel") { touch(); refreshInputs(); renderResults(); } });
+
+var undoBuf = null, toastTimer = null;
+function toast(text, undo) {
+  undoBuf = undo;
+  document.getElementById("toastText").textContent = text;
+  document.getElementById("toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { document.getElementById("toast").hidden = true; undoBuf = null; }, 6000);
+}
+document.getElementById("undo").addEventListener("click", function () {
+  if (undoBuf) { undoBuf(); undoBuf = null; touch(); renderInputs(); renderResults(); }
+  document.getElementById("toast").hidden = true;
+});
+
+inputsEl.addEventListener("click", function (e) {
+  var b = e.target.closest("button[data-act]"); if (!b) return;
+  var act = b.dataset.act;
+  if (act === "months") {
+    var mp = b.closest(".pos").querySelector(".months");
+    mp.hidden = !mp.hidden; b.setAttribute("aria-expanded", String(!mp.hidden)); refreshInputs(); return;
+  }
+  if (act === "vtab") { vTab = +b.dataset.vi; renderInputs(); return; }
+  if (act === "add") {
+    var l = listFor(b.dataset.sec), it = item(""); l.push(it); touch(); renderInputs(); renderResults();
+    var el = inputsEl.querySelector('.pos[data-id="' + it.id + '"] .name'); if (el) el.focus(); return;
+  }
+  if (act === "del") {
+    var row = b.closest(".pos"), list = listFor(row.dataset.sec), idx = list.findIndex(function (x) { return x.id === row.dataset.id; });
+    var gone = list.splice(idx, 1)[0];
+    touch(); renderInputs(); renderResults();
+    toast("„" + (gone.name || "Position") + "“ gelöscht", function () { list.splice(idx, 0, gone); }); return;
+  }
+  if (act === "addgroup") {
+    var g = { id: uid(), name: "Neue Gruppe", items: [item("")] }; cur.groups.push(g); touch(); renderInputs(); renderResults();
+    var gi = inputsEl.querySelector('[data-gid="' + g.id + '"].gname'); if (gi) { gi.focus(); gi.select(); } return;
+  }
+  if (act === "delgroup") {
+    var gidx = cur.groups.findIndex(function (x) { return x.id === b.dataset.gid; }), gg = cur.groups.splice(gidx, 1)[0];
+    touch(); renderInputs(); renderResults();
+    toast("Gruppe „" + gg.name + "“ gelöscht", function () { cur.groups.splice(gidx, 0, gg); }); return;
+  }
+  if (act === "addpart") { cur.variants[vTab].parts.push({ id: uid(), name: "", v: null }); touch(); renderInputs(); renderResults(); return; }
+  if (act === "delpart") {
+    var pid = b.closest(".part").dataset.pid, parts = cur.variants[vTab].parts, pi = parts.findIndex(function (x) { return x.id === pid; });
+    var gp = parts.splice(pi, 1)[0]; touch(); renderInputs(); renderResults();
+    toast("„" + (gp.name || "Bestandteil") + "“ gelöscht", function () { parts.splice(pi, 0, gp); });
+  }
+});
+document.getElementById("ytable").addEventListener("click", function (e) { var b = e.target.closest("[data-goto]"); if (b) { setYear(+b.dataset.goto); window.scrollTo({ top: 0 }); } });
+
+var sel = document.getElementById("year");
+for (var y = Y0; y <= Y1; y++) { var o = document.createElement("option"); o.value = y; o.textContent = y; sel.appendChild(o); }
+sel.addEventListener("change", function () { setYear(+sel.value); });
+document.getElementById("prevYear").addEventListener("click", function () { if (year > Y0) setYear(year - 1); });
+document.getElementById("nextYear").addEventListener("click", function () { if (year < Y1) setYear(year + 1); });
+function setYear(y) {
+  year = y; sel.value = y;
+  cur = saved[y] || clone(derive(y));
+  normYear(cur);
+  vTab = 0;
+  document.getElementById("prevYear").disabled = y <= Y0;
+  document.getElementById("nextYear").disabled = y >= Y1;
+  renderInputs(); renderResults();
+}
+
+/* ---------- Speichern: leere Vorlage beim Öffnen, Sicherung mit Sicherungscode, verschlüsselter Zwischenspeicher ---------- */
+var store = { mode: "none", col: null }, draftTimer = null, writing = false, again = false;
+var DRAFT_KEY = "haushaltsbuch.entwurf";
+var session = { dek: null, dekRaw: null, wraps: {}, touched: false, unsaved: false };
+var pending = null; // Zwischenspeicher vom letzten Mal, über den noch nicht entschieden wurde
+function setStatus(t, warn) { var el = document.getElementById("status"); el.textContent = t; el.classList.toggle("warn", !!warn); }
+function payload() { return { app: "monatsbudget", version: 1, saved: saved }; }
+function yearCount(p) { return p && p.saved ? Object.keys(p.saved).length : 0; }
+function scheduleSave() {
+  session.touched = true; session.unsaved = true;
+  clearTimeout(draftTimer); draftTimer = setTimeout(function () { draftTimer = null; saveDraft(); }, 400);
+}
+function flushSave() { if (draftTimer) { clearTimeout(draftTimer); draftTimer = null; saveDraft(); } }
+document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flushSave(); });
+window.addEventListener("pagehide", flushSave);
+
+/* Verschlüsselung wie im Kreditrechner: Die Daten sind mit einem zufälligen Datenschlüssel (AES-GCM) verschlüsselt.
+   Dieser Datenschlüssel liegt zweimal bei: einmal mit dem Sicherungscode und einmal mit dem Masterkey verschlossen (PBKDF2).
+   So öffnet jeder der beiden die Sicherung, und beide lassen sich ändern, ohne die Daten neu zu verschlüsseln. */
+function b64(buf) { var u = new Uint8Array(buf), s = ""; for (var i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); }
+function unb64(s) { var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+function rnd(n) { return crypto.getRandomValues(new Uint8Array(n)); }
+async function deriveKey(secret, salt) {
+  var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt, iterations: 250000, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function useDek(raw) { session.dekRaw = raw; session.dek = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]); }
+async function newDek() { await useDek(rnd(32)); session.wraps = {}; }
+async function wrapDek(secret) {
+  var salt = rnd(16), iv = rnd(12), k = await deriveKey(secret, salt);
+  var ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, k, session.dekRaw);
+  return { salt: b64(salt), iv: b64(iv), data: b64(ct) };
+}
+/* kind: "code" (Sicherungscode) oder "master" (Masterkey) */
+async function setSecret(kind, secret) { if (!session.dek) await newDek(); session.wraps[kind] = await wrapDek(secret); }
+async function encryptState() {
+  var iv = rnd(12);
+  var ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, session.dek, new TextEncoder().encode(JSON.stringify(payload())));
+  return { enc: 2, iv: b64(iv), data: b64(ct), keys: clone(session.wraps) };
+}
+/* Öffnet eine Sicherung oder den Zwischenspeicher mit Sicherungscode ODER Masterkey */
+async function unlockWith(j, secret) {
+  if (j.enc === 1 || j.encrypted === 1) { // ältere Sicherungen: nur mit dem Sicherungscode
+    var key = await deriveKey(secret, unb64(j.salt));
+    var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(j.iv) }, key, unb64(j.data));
+    var data = JSON.parse(new TextDecoder().decode(pt));
+    await newDek(); session.wraps.code = await wrapDek(secret);
+    return { data: data, kind: "code" };
+  }
+  var kinds = ["code", "master"];
+  for (var i = 0; i < kinds.length; i++) {
+    var w = j.keys && j.keys[kinds[i]]; if (!w) continue;
+    try {
+      var k = await deriveKey(secret, unb64(w.salt));
+      var raw = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(w.iv) }, k, unb64(w.data)));
+      var dek = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+      var p2 = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(j.iv) }, dek, unb64(j.data));
+      session.dekRaw = raw; session.dek = dek; session.wraps = clone(j.keys);
+      return { data: JSON.parse(new TextDecoder().decode(p2)), kind: kinds[i] };
+    } catch (x) { /* nächster Schlüssel */ }
+  }
+  throw new Error("locked");
+}
+function unlockedText(kind) { return kind === "master" ? " Mit dem Masterkey entsperrt – unter »Schlüssel« kannst du einen neuen Sicherungscode festlegen." : ""; }
+
+/* Zwischenspeicher: im Konto, wenn möglich, sonst auf diesem Gerät */
+async function draftBody() {
+  var b = session.dek ? await encryptState() : { data: clone(payload()) };
+  b.app = "haushaltsbuch"; b.updated = Date.now(); b.count = Object.keys(saved).length;
+  return b;
+}
+async function writeDraft(body) {
+  if (store.mode === "db") return store.col.doc("entwurf").set(body);
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(body));
+}
+async function readDraft() {
+  if (store.mode === "db") { var s = await store.col.doc("entwurf").get(); return s.exists ? s.data() : null; }
+  try { var t = localStorage.getItem(DRAFT_KEY); return t ? JSON.parse(t) : null; } catch (e) { return null; }
+}
+async function clearDraft() {
+  try { if (store.mode === "db") await store.col.doc("entwurf").delete(); else localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+}
+async function saveDraft() {
+  if (!session.touched || store.mode === "none") return;
+  if (pending) { setStatus("Noch nicht zwischengespeichert: Entscheide oben erst, ob du die Daten vom letzten Mal wiederherstellen oder verwerfen willst.", true); return; }
+  if (writing) { again = true; return; }
+  writing = true;
+  try {
+    await writeDraft(await draftBody());
+    setStatus(session.dek ? "Änderungen sind verschlüsselt zwischengespeichert. Zum dauerhaften Aufheben »Sicherung speichern«."
+      : "Änderungen sind zwischengespeichert, aber noch ohne Sicherungscode. Mit »Sicherung speichern« legst du einen Code fest.");
+  } catch (e) {
+    setStatus("Zwischenspeichern hat nicht geklappt – bitte »Sicherung speichern« tippen.", true);
+  }
+  writing = false;
+  if (again) { again = false; saveDraft(); }
+}
+function validState(d) { return d && d.saved && typeof d.saved === "object"; }
+function fmtWhen(ms) { var d = new Date(ms); return d.toLocaleDateString("de-DE") + ", " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }); }
+function renderRestore() {
+  var box = document.getElementById("restoreBox");
+  if (!pending) { box.hidden = true; return; }
+  box.hidden = false;
+  var n = pending.count || yearCount(pending.data);
+  document.getElementById("restoreText").textContent = "Nicht gesicherte Daten vom " + fmtWhen(pending.updated || Date.now()) +
+    (n ? " (" + n + (n === 1 ? " Jahr" : " Jahre") + ")" : "") + (pending.enc ? " – mit deinem Sicherungscode geschützt." : ".");
+  document.getElementById("restoreAsk").hidden = !pending.askDrop;
+  document.getElementById("restoreBtns").hidden = !!pending.askDrop;
+}
+function setSaved(p) {
+  saved = {};
+  Object.keys(p.saved || {}).forEach(function (k) { var y = +k; if (y >= Y0 && y <= Y1 && p.saved[k]) saved[y] = p.saved[k]; });
+  derivedCache = {}; setYear(year);
+}
+document.getElementById("restoreBox").addEventListener("click", async function (e) {
+  var b = e.target.closest("button"); if (!b || !pending) return;
+  if (b.id === "restoreYes") {
+    var data = null, p = pending, how = "";
+    if (p.enc) {
+      var code = await askCode({ title: "Zwischenspeicher entsperren", ok: "Wiederherstellen", repeat: false,
+        text: "Gib deinen Sicherungscode oder deinen Masterkey ein.", placeholder: "Sicherungscode oder Masterkey",
+        check: async function (c) { try { var r = await unlockWith(p, c); data = r.data; how = r.kind; return true; } catch (x) { return false; } } });
+      if (code == null) return;
+    } else data = p.data;
+    if (!validState(data)) { setStatus("Der Zwischenspeicher ist beschädigt.", true); return; }
+    pending = null; setSaved(clone(data)); session.touched = true; session.unsaved = true;
+    renderRestore();
+    setStatus("Wiederhergestellt. Zum dauerhaften Aufheben »Sicherung speichern«." + (p.enc ? unlockedText(how) : ""));
+    saveDraft();
+  } else if (b.id === "restoreNo") { pending.askDrop = true; renderRestore(); }
+  else if (b.id === "restoreKeep") { pending.askDrop = false; renderRestore(); }
+  else if (b.id === "restoreDrop") {
+    pending = null; renderRestore(); await clearDraft();
+    setStatus("Verworfen. Leere Vorlage – lade deine Sicherung oder fang mit deinem Gehalt an.");
+    if (session.touched) saveDraft();
+  }
+});
+async function initStore() {
+  var c = window.claude, db = null, user = null;
+  if (c && c.use) { try { var res = await Promise.all([c.use("db"), c.use("user")]); db = res[0]; user = res[1]; } catch (e) {} }
+  var id = null; try { id = user ? await user.id() : null; } catch (e) {}
+  if (db && id) { store.mode = "db"; store.col = db.collection("data/users/" + id); } else store.mode = "local";
+  try {
+    var d = await readDraft();
+    /* Daten aus älteren Versionen (automatisch gespeichert) einmalig in den Zwischenspeicher übernehmen */
+    var old = {}, oldDocs = [];
+    if (store.mode === "db") {
+      var snap = await store.col.get();
+      snap.docs.forEach(function (x) { var m = /^y(\d{4})$/.exec(x.id); if (m && x.exists && x.data().data) { old[+m[1]] = x.data().data; oldDocs.push(x.id); } });
+    }
+    try {
+      for (var y = Y0; y <= Y1; y++) { var t = localStorage.getItem("budget.y" + y); if (t && !old[y]) { var o = JSON.parse(t); if (o && o.data) old[y] = o.data; } }
+    } catch (e) {}
+    if (!d && Object.keys(old).length) {
+      d = { app: "haushaltsbuch", data: { app: "monatsbudget", version: 1, saved: old }, updated: Date.now(), count: Object.keys(old).length };
+      await writeDraft(d);
+    }
+    for (var k = 0; k < oldDocs.length; k++) { try { await store.col.doc(oldDocs[k]).delete(); } catch (e) {} }
+    try {
+      for (var y2 = Y0; y2 <= Y1; y2++) localStorage.removeItem("budget.y" + y2);
+      localStorage.removeItem("budget.year"); localStorage.removeItem("haushaltsbuch.code");
+    } catch (e) {}
+    if (d && (d.enc || validState(d.data))) { pending = d; renderRestore(); }
+  } catch (e) {}
+  if (pending) setStatus("Leere Vorlage. Oben kannst du die Daten vom letzten Mal wiederherstellen.");
+  else if (!session.touched) setStatus("Leere Vorlage – lade deine Sicherung oder fang mit deinem Gehalt an.");
+  else saveDraft();
+}
+/* ---------- Dateien: Excel-Export und Sicherung ---------- */
+async function saveFile(name, data) {
+  var c = window.claude;
+  if (c && c.use) {
+    var dl = null; try { dl = await c.use("downloads"); } catch (e) {}
+    if (dl) {
+      try { await dl.save({ filename: name, data: data }); setStatus("Datei gespeichert: " + name); return true; }
+      catch (e) { if (!e || e.code !== "declined") setStatus("Datei konnte hier nicht gespeichert werden", true); return false; }
+    }
+  }
+  /* Eigene Webansicht (GitHub): normaler Download */
+  try {
+    var blob = data instanceof Blob ? data : new Blob([data], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+    setStatus("Datei gespeichert: " + name);
+    return true;
+  } catch (e) { setStatus("Dateien lassen sich in dieser Ansicht nicht speichern.", true); return false; }
+}
+function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function hasVal(it) { return it.m != null || it.y != null || Object.keys(it.o || {}).length > 0; }
+/* Kleiner XLSX-Schreiber ohne Bibliothek: ZIP (ungepackt) + SpreadsheetML */
+var CRC = (function () { var t = [], c; for (var n = 0; n < 256; n++) { c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { var c = 0xFFFFFFFF; for (var i = 0; i < u8.length; i++) c = CRC[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zip(files) {
+  var enc = new TextEncoder(), parts = [], central = [], off = 0;
+  function u16(v) { return [v & 255, (v >>> 8) & 255]; }
+  function u32(v) { return [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255]; }
+  files.forEach(function (f) {
+    var name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+    var head = [].concat(u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0));
+    parts.push(new Uint8Array(head), name, data);
+    central.push(new Uint8Array([].concat(u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(0), u16(0x21), u32(crc), u32(data.length), u32(data.length), u16(name.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(off))), name);
+    off += head.length + name.length + data.length;
+  });
+  var csize = central.reduce(function (a, x) { return a + x.length; }, 0);
+  var end = new Uint8Array([].concat(u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length), u32(csize), u32(off), u16(0)));
+  return new Blob(parts.concat(central, [end]), { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+function xmlEsc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ""); }
+function colName(i) { var s = ""; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+/* Stile: 0 Text, 1 Kopf, 2 €, 3 € fett/Summe, 4 %, 5 Abschnitt, 6 Titel, 7 % fett, 8 Text fett/Summe, 9 Text grau */
+var XL_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+  '<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0.00\\ &quot;€&quot;;[Red]\\-#,##0.00\\ &quot;€&quot;"/><numFmt numFmtId="165" formatCode="0.0%"/></numFmts>' +
+  '<fonts count="5"><font><sz val="11"/><color rgb="FF12202A"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF12202A"/><name val="Calibri"/></font><font><b/><sz val="16"/><color rgb="FF12202A"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FF566874"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF0A756A"/><name val="Calibri"/></font></fonts>' +
+  '<fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F5F6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE6F2F0"/></patternFill></fill></fills>' +
+  '<borders count="3"><border/><border><bottom style="thin"><color rgb="FFD8E0E4"/></bottom></border><border><top style="medium"><color rgb="FFD8E0E4"/></top></border></borders>' +
+  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="10">' +
+  '<xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>' +
+  '<xf numFmtId="0" fontId="3" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/>' +
+  '<xf numFmtId="164" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>' +
+  '<xf numFmtId="164" fontId="1" fillId="3" borderId="2" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>' +
+  '<xf numFmtId="165" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>' +
+  '<xf numFmtId="0" fontId="4" fillId="0" borderId="1" applyFont="1" applyBorder="1"/>' +
+  '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" applyFont="1"/>' +
+  '<xf numFmtId="165" fontId="1" fillId="3" borderId="2" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>' +
+  '<xf numFmtId="0" fontId="1" fillId="3" borderId="2" applyFont="1" applyFill="1" applyBorder="1"/>' +
+  '<xf numFmtId="0" fontId="3" fillId="0" borderId="0" applyFont="1"/>' +
+  '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+/* rows: [{kind, cells:[...]}]; kind: title|head|item|section|total|pct|totalpct|blank|note */
+function sheetXml(rows, widths, freeze) {
+  var out = [];
+  rows.forEach(function (row, ri) {
+    var r = ri + 1, cells = [];
+    (row.cells || []).forEach(function (v, ci) {
+      var ref = colName(ci) + r, k = row.kind, st;
+      var isNum = typeof v === "number" && isFinite(v);
+      if (k === "head") st = 1;
+      else if (k === "title") st = 6;
+      else if (k === "section") st = 5;
+      else if (k === "note") st = 9;
+      else if (k === "total") st = isNum ? 3 : 8;
+      else if (k === "totalpct") st = isNum ? 7 : 8;
+      else if (k === "pct") st = isNum ? 4 : 0;
+      else st = isNum ? (row.pctCols && row.pctCols.indexOf(ci) >= 0 ? 4 : 2) : 0;
+      if (v == null || v === "") { if (st === 3 || st === 8 || st === 7 || st === 1) cells.push('<c r="' + ref + '" s="' + st + '"/>'); return; }
+      if (isNum) cells.push('<c r="' + ref + '" s="' + st + '"><v>' + (Math.round(v * 10000) / 10000) + "</v></c>");
+      else cells.push('<c r="' + ref + '" s="' + st + '" t="inlineStr"><is><t xml:space="preserve">' + xmlEsc(v) + "</t></is></c>");
+    });
+    out.push('<row r="' + r + '">' + cells.join("") + "</row>");
+  });
+  var pane = freeze ? '<pane xSplit="' + freeze[0] + '" ySplit="' + freeze[1] + '" topLeftCell="' + colName(freeze[0]) + (freeze[1] + 1) + '" activePane="bottomRight" state="frozen"/>' : "";
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0" showGridLines="0">' + pane + "</sheetView></sheetViews>" +
+    "<cols>" + widths.map(function (w, i) { return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>'; }).join("") + "</cols><sheetData>" + out.join("") + "</sheetData></worksheet>";
+}
+function buildXlsx(sheets) {
+  var files = [
+    { name: "[Content_Types].xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      sheets.map(function (_, i) { return '<Override PartName="/xl/worksheets/sheet' + (i + 1) + '.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'; }).join("") + "</Types>" },
+    { name: "_rels/.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+    { name: "xl/workbook.xml", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' +
+      sheets.map(function (sh, i) { return '<sheet name="' + xmlEsc(sh.name) + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>'; }).join("") + "</sheets></workbook>" },
+    { name: "xl/_rels/workbook.xml.rels", data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      sheets.map(function (_, i) { return '<Relationship Id="rId' + (i + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' + (i + 1) + '.xml"/>'; }).join("") +
+      '<Relationship Id="rId' + (sheets.length + 1) + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+    { name: "xl/styles.xml", data: XL_STYLES }
+  ];
+  sheets.forEach(function (sh, i) { files.push({ name: "xl/worksheets/sheet" + (i + 1) + ".xml", data: sheetXml(sh.rows, sh.widths, sh.freeze) }); });
+  return zip(files);
+}
+function yearRows(d, y) {
+  var r = compute(d), rows = [];
+  function row(kind, cells) { rows.push({ kind: kind, cells: cells }); }
+  function item(name, m, yy, months) { var t = sum(months); row("item", [name, m == null ? null : m, yy == null ? null : yy].concat(months.map(function (v) { return v || null; }), [t || null])); }
+  function total(label, arr) { row("total", [label, sum(arr) / 12, sum(arr)].concat(arr, [sum(arr)])); }
+  row("title", ["Haushaltsbuch " + y]);
+  row("note", [saved[y] ? "Eigene Einträge" : "Feste Beträge aus " + (y - 1) + " übernommen"]);
+  row("blank", []);
+  row("head", ["Position", "€ / Monat", "€ / Jahr"].concat(MON, ["Summe Jahr"]));
+  row("section", ["Einnahmen"]);
+  item("Gehalt", d.salary.m, d.salary.y, salaryMonths(d));
+  d.income.forEach(function (it) { if (it.name || hasVal(it)) item(it.name, it.m, it.y, itemMonths(it)); });
+  total("Summe Einnahmen", r.inc); row("blank", []);
+  row("section", ["Ausgaben"]);
+  d.groups.forEach(function (g) {
+    var gm = zeros(), its = [];
+    g.items.forEach(function (it) { if (it.name || hasVal(it)) { var m = itemMonths(it); addInto(gm, m); its.push([it, m]); } });
+    total(g.name, gm);
+    its.forEach(function (x) { item("   " + x[0].name, x[0].m, x[0].y, x[1]); });
+  });
+  total("Summe Ausgaben", r.out); row("blank", []);
+  row("section", ["Sparen & Investieren"]);
+  d.savings.forEach(function (it) { if (it.name || hasVal(it)) item(it.name, it.m, it.y, itemMonths(it)); });
+  total("Summe Sparen", r.sav); row("blank", []);
+  total("Übrig", r.free);
+  row("totalpct", ["Sparquote", null, r.rate].concat(r.inc.map(function (x, i) { return x > 0 ? r.sav[i] / x : null; }), [r.rate]));
+  row("blank", []);
+  row("section", ["Gehalt-Varianten"]);
+  row("head", ["Bestandteil"].concat(d.variants.map(function (v) { return v.name; })));
+  var maxP = Math.max.apply(null, d.variants.map(function (v) { return v.parts.length; }));
+  for (var i = 0; i < maxP; i++) {
+    var lbl = (d.variants.find(function (v) { return v.parts[i] && v.parts[i].name; }) || { parts: [{ name: "" }] }).parts[i];
+    row("item", [(lbl && lbl.name) || ""].concat(d.variants.map(function (v) { return v.parts[i] ? v.parts[i].v : null; })));
+  }
+  row("total", ["Auszahlung"].concat(variantTotals(d)));
+  row("item", ["Variante je Monat", null, null].concat(d.salary.sel.map(function (k) { return (d.variants[k] || {}).name || ""; })));
+  return rows;
+}
+function exportXlsx() {
+  var sheets = [], ov = [];
+  ov.push({ kind: "title", cells: ["Haushaltsbuch " + Y0 + "–" + Y1] });
+  ov.push({ kind: "note", cells: ["Export vom " + new Date().toLocaleDateString("de-DE")] });
+  ov.push({ kind: "blank", cells: [] });
+  ov.push({ kind: "head", cells: ["Jahr", "Einnahmen", "Ausgaben", "Gespart", "Übrig", "Sparquote", "Gespart gesamt", "Daten"] });
+  var cum = 0;
+  for (var y = Y0; y <= Y1; y++) {
+    var r = compute(y === year ? cur : derive(y)); cum += r.S;
+    ov.push({ kind: "item", pctCols: [5], cells: [String(y), r.I, r.O, r.S, r.F, r.rate, cum, saved[y] ? "eigene Einträge" : "aus Vorjahr"] });
+  }
+  sheets.push({ name: "Übersicht", rows: ov, widths: [10, 14, 14, 14, 14, 11, 16, 18], freeze: [1, 4] });
+  var years = Object.keys(saved).map(Number); if (years.indexOf(year) < 0) years.push(year);
+  years.sort(function (a, b) { return a - b; }).forEach(function (y) {
+    sheets.push({ name: String(y), rows: yearRows(y === year ? cur : derive(y), y), widths: [30, 12, 12].concat(MON.map(function () { return 11; }), [13]), freeze: [1, 4] });
+  });
+  var bk = [{ kind: "note", cells: ["Haushaltsbuch-Sicherung – dieses Blatt wird beim Excel-Import gelesen, bitte nicht ändern."] }, { kind: "head", cells: ["Jahr", "Daten"] }];
+  Object.keys(saved).map(Number).sort(function (a, b) { return a - b; }).forEach(function (y) { bk.push({ kind: "item", cells: [String(y), JSON.stringify(saved[y])] }); });
+  sheets.push({ name: "Sicherung", rows: bk, widths: [10, 80] });
+  saveFile("Haushaltsbuch-" + today() + ".xlsx", buildXlsx(sheets));
+}
+document.getElementById("exportXlsx").addEventListener("click", exportXlsx);
+/* ---------- Dialog für Sicherungscode und Masterkey ---------- */
+var dlgResolve = null, dlgCheck = null, dlgMin = 4, dlgName = "Der Sicherungscode";
+function askCode(opts) {
+  document.getElementById("dlgTitle").textContent = opts.title;
+  document.getElementById("dlgText").textContent = opts.text;
+  document.getElementById("dlgOk").textContent = opts.ok;
+  var c1 = document.getElementById("dlgCode1"), c2 = document.getElementById("dlgCode2");
+  c1.value = ""; c2.value = ""; c2.hidden = !opts.repeat;
+  c1.placeholder = opts.placeholder || "Sicherungscode"; c2.placeholder = (opts.placeholder || "Sicherungscode") + " wiederholen";
+  document.getElementById("dlgCancel").textContent = opts.cancel || "Abbrechen";
+  dlgMin = opts.min || 4; dlgName = opts.name || "Der Sicherungscode";
+  document.getElementById("dlgErr").textContent = "";
+  document.getElementById("codeDlg").hidden = false; setTimeout(function () { c1.focus(); }, 50);
+  dlgCheck = opts.check || null;
+  return new Promise(function (res) { dlgResolve = res; });
+}
+function closeDlg(v) { document.getElementById("codeDlg").hidden = true; var r = dlgResolve; dlgResolve = null; if (r) r(v); }
+document.getElementById("dlgCancel").addEventListener("click", function () { closeDlg(null); });
+document.getElementById("dlgForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  var c1 = document.getElementById("dlgCode1").value, c2 = document.getElementById("dlgCode2"), err = document.getElementById("dlgErr");
+  if (c1.length < dlgMin) { err.textContent = dlgName + " braucht mindestens " + dlgMin + " Zeichen."; return; }
+  if (!c2.hidden && c1 !== c2.value) { err.textContent = "Die beiden Eingaben stimmen nicht überein."; return; }
+  if (dlgCheck) {
+    var btn = document.getElementById("dlgOk"); btn.disabled = true; err.textContent = "Wird geprüft …";
+    var ok = await dlgCheck(c1); btn.disabled = false;
+    if (!ok) { err.textContent = "Das passt nicht – weder Sicherungscode noch Masterkey."; document.getElementById("dlgCode1").value = ""; return; }
+  }
+  closeDlg(c1);
+});
+
+/* ---------- Schlüssel verwalten: Sicherungscode und Masterkey ---------- */
+async function askMaster(first) {
+  var m = await askCode({ title: first ? "Masterkey festlegen" : "Neuer Masterkey", ok: "Masterkey speichern", repeat: true, min: 8, name: "Der Masterkey",
+    placeholder: "Masterkey", cancel: first ? "Später" : "Abbrechen",
+    text: "Mit dem Masterkey öffnest du deine Sicherungen auch dann, wenn du den Sicherungscode vergessen hast. Mindestens 8 Zeichen – bewahr ihn getrennt vom Sicherungscode auf, z. B. ausgedruckt zu Hause." });
+  if (m == null) return false;
+  setStatus("Masterkey wird eingerichtet …");
+  await setSecret("master", m);
+  return true;
+}
+function renderKeys() {
+  var box = document.getElementById("keyBox"); if (!box || box.hidden) return;
+  var h;
+  if (!session.dek) h = "<p>Lade zuerst deine Sicherung oder tippe einmal auf »Sicherung speichern«. Danach kannst du hier Sicherungscode und Masterkey ändern.</p>";
+  else h = "<p>Sicherungscode: <b>" + (session.wraps.code ? "festgelegt" : "fehlt") + "</b> · Masterkey: <b>" + (session.wraps.master ? "festgelegt" : "noch nicht festgelegt") + "</b></p>" +
+    '<div class="rowbtns"><button type="button" id="keyCode">Sicherungscode ändern</button><button type="button" id="keyMaster">' + (session.wraps.master ? "Masterkey ändern" : "Masterkey festlegen") + "</button></div>" +
+    '<p class="foot">Änderungen gelten für alle Sicherungen, die du ab jetzt speicherst. Ältere Sicherungsdateien öffnen sich weiter mit dem Code bzw. Masterkey von damals.</p>';
+  box.innerHTML = h;
+}
+document.getElementById("keysBtn").addEventListener("click", function () {
+  var box = document.getElementById("keyBox"); box.hidden = !box.hidden;
+  this.setAttribute("aria-expanded", String(!box.hidden)); renderKeys();
+});
+document.getElementById("keyBox").addEventListener("click", async function (e) {
+  var b = e.target.closest("button"); if (!b) return;
+  var done = false;
+  if (b.id === "keyCode") {
+    var c = await askCode({ title: "Neuer Sicherungscode", ok: "Code speichern", repeat: true, text: "Leg deinen neuen Sicherungscode fest." });
+    if (c != null) { setStatus("Sicherungscode wird geändert …"); await setSecret("code", c); done = "Neuer Sicherungscode"; }
+  } else if (b.id === "keyMaster") {
+    if (await askMaster(false)) done = "Neuer Masterkey";
+  }
+  if (!done) return;
+  renderKeys();
+  if (session.touched) saveDraft();
+  setStatus(done + " ist eingerichtet. Tippe jetzt »Sicherung speichern«, damit die Sicherungsdatei ihn bekommt.");
+});
+
+/* ---------- Sicherung speichern und laden ---------- */
+document.getElementById("backupSave").addEventListener("click", async function () {
+  if (!session.dek || !session.wraps.code) {
+    var code = await askCode({ title: "Sicherung schützen", ok: "Weiter", repeat: true,
+      text: "Leg einen Sicherungscode fest. Ohne ihn (oder den Masterkey) lässt sich die Sicherung später nicht öffnen – auch nicht von mir oder jemand anderem." });
+    if (code == null) return;
+    setStatus("Sicherung wird verschlüsselt …");
+    await setSecret("code", code);
+    if (!session.wraps.master) await askMaster(true);
+  }
+  try {
+    var body = await encryptState(); body.app = "haushaltsbuch"; body.version = 2;
+    var ok = await saveFile("Haushaltsbuch-Sicherung-" + today() + ".json", JSON.stringify(body));
+    if (ok) {
+      session.unsaved = false; session.touched = false; clearTimeout(draftTimer); draftTimer = null;
+      if (!pending) await clearDraft();
+      var n = Object.keys(saved).length;
+      setStatus(n + (n === 1 ? " Jahr" : " Jahre") + " gesichert – mit Sicherungscode" + (session.wraps.master ? " und Masterkey geschützt." : " geschützt. Tipp: Unter »Schlüssel« einen Masterkey festlegen."));
+      renderKeys();
+    }
+  } catch (x) { setStatus("Sicherung konnte nicht erstellt werden.", true); }
+});
+function applyLoaded(data, label) {
+  var before = clone(saved), beforeTouched = session.touched;
+  setSaved(clone(data));
+  session.touched = false; session.unsaved = false;
+  var n = Object.keys(saved).length;
+  setStatus(label + ": " + n + (n === 1 ? " Jahr" : " Jahre") + ".");
+  toast(label, function () { saved = before; derivedCache = {}; setYear(year); session.touched = beforeTouched; if (beforeTouched) scheduleSave(); });
+}
+document.getElementById("backupLoad").addEventListener("change", function (e) {
+  var f = e.target.files && e.target.files[0]; if (!f) return;
+  var rd = new FileReader();
+  rd.onload = async function () {
+    e.target.value = "";
+    var j;
+    try { j = JSON.parse(rd.result); } catch (x) { setStatus("Diese Datei ist keine Haushaltsbuch-Sicherung", true); return; }
+    if (!j || (j.app !== "haushaltsbuch" && j.app !== "monatsbudget")) { setStatus("Diese Datei ist keine Haushaltsbuch-Sicherung", true); return; }
+    if (j.enc || j.encrypted) {
+      var data = null, how = "", older = j.enc === 1 || j.encrypted === 1;
+      var code = await askCode({ title: "Sicherung entsperren", ok: "Entsperren", repeat: false, placeholder: "Sicherungscode oder Masterkey",
+        text: "Gib deinen Sicherungscode oder deinen Masterkey ein." + (older ? " Diese ältere Sicherung lässt sich nur mit dem Sicherungscode öffnen." : ""),
+        check: async function (c) { try { var r = await unlockWith(j, c); data = r.data; how = r.kind; return true; } catch (x) { return false; } } });
+      if (code == null) return;
+      if (!validState(data)) { setStatus("Die Sicherung ist beschädigt.", true); return; }
+      applyLoaded(data, "Sicherung geladen");
+      if (how === "master" || !session.wraps.master) setStatus("Sicherung geladen." + unlockedText(how) + (!session.wraps.master ? " Für diese Sicherung ist noch kein Masterkey festgelegt – das geht unter »Schlüssel«." : ""));
+      renderKeys();
+    } else if (validState(j)) {
+      applyLoaded(j, "Ältere Sicherung ohne Code geladen");
+    } else setStatus("Diese Datei ist keine Haushaltsbuch-Sicherung", true);
+  };
+  rd.readAsText(f);
+});
+
+/* ---------- Excel-Import ---------- */
+async function unzipEntries(buf) {
+  var u8 = new Uint8Array(buf), dv = new DataView(buf), eocd = -1;
+  for (var i = u8.length - 22; i >= Math.max(0, u8.length - 70000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("zip");
+  var n = dv.getUint16(eocd + 10, true), p = dv.getUint32(eocd + 16, true), out = {}, dec = new TextDecoder();
+  for (var k = 0; k < n; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("zip");
+    var method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    var nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    var name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    var start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+    out[name] = { method: method, data: u8.subarray(start, start + csize) };
+    p += 46 + nlen + elen + clen;
+  }
+  return out;
+}
+async function entryText(e) {
+  if (!e) return null;
+  if (e.method === 0) return new TextDecoder().decode(e.data);
+  if (e.method !== 8 || typeof DecompressionStream === "undefined") throw new Error("deflate");
+  var ds = new Blob([e.data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return await new Response(ds).text();
+}
+function colIndex(ref) { var m = /^([A-Z]+)/.exec(ref), n = 0; for (var i = 0; i < m[1].length; i++) n = n * 26 + (m[1].charCodeAt(i) - 64); return n - 1; }
+async function readWorkbook(buf) {
+  var z = await unzipEntries(buf), P = new DOMParser();
+  function xml(t) { return P.parseFromString(t, "application/xml"); }
+  var shared = [];
+  var sst = await entryText(z["xl/sharedStrings.xml"]);
+  if (sst) Array.prototype.forEach.call(xml(sst).getElementsByTagName("si"), function (si) {
+    var ts = si.getElementsByTagName("t"), t = ""; for (var i = 0; i < ts.length; i++) t += ts[i].textContent; shared.push(t);
+  });
+  var wb = xml(await entryText(z["xl/workbook.xml"])), rels = xml(await entryText(z["xl/_rels/workbook.xml.rels"])), relMap = {};
+  Array.prototype.forEach.call(rels.getElementsByTagName("Relationship"), function (r) { relMap[r.getAttribute("Id")] = r.getAttribute("Target"); });
+  var sheets = [];
+  var list = wb.getElementsByTagName("sheet");
+  for (var si = 0; si < list.length; si++) {
+    var sh = list[si], rid = sh.getAttribute("r:id") || sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+    var target = relMap[rid] || ""; target = target.replace(/^\//, ""); if (target.indexOf("xl/") !== 0) target = "xl/" + target;
+    var txt = await entryText(z[target]); if (!txt) continue;
+    var rows = [];
+    Array.prototype.forEach.call(xml(txt).getElementsByTagName("row"), function (row) {
+      var r = [];
+      Array.prototype.forEach.call(row.getElementsByTagName("c"), function (c) {
+        var t = c.getAttribute("t"), v = c.getElementsByTagName("v")[0], val = null;
+        if (t === "s" && v) val = shared[+v.textContent];
+        else if (t === "inlineStr") { var is = c.getElementsByTagName("t"); val = is.length ? is[0].textContent : ""; }
+        else if (t === "str" && v) val = v.textContent;
+        else if (t === "b" && v) val = v.textContent === "1";
+        else if (v && v.textContent !== "") val = parseFloat(v.textContent);
+        r[colIndex(c.getAttribute("r"))] = val;
+      });
+      rows[(+row.getAttribute("r") || rows.length + 1) - 1] = r;
+    });
+    sheets.push({ name: sh.getAttribute("name"), rows: rows });
+  }
+  return sheets;
+}
+function num(v) { return typeof v === "number" && isFinite(v) ? v : null; }
+function sheetToYear(rows) {
+  var d = { salary: { m: null, y: null, o: {}, sel: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, variants: [], income: [], groups: [], savings: [] };
+  var formatB = rows.some(function (r) { return r && typeof r[0] === "string" && r[0].indexOf("neue Zeile") >= 0; });
+  var sec = null, prevMarker = false, group = null, any = false, gvNames = null, gvParts = [], selNames = null, salaryRow = null;
+  function mkItem(r, name) {
+    var it = { id: uid(), name: name, m: num(r[1]), y: num(r[2]), o: {} };
+    var exp = it.y ? it.y / 12 : (it.m || 0);
+    for (var i = 0; i < 12; i++) { var v = num(r[3 + i]); if (v != null && Math.abs(v - exp) > 0.005) it.o[i] = v; else if (v == null && exp !== 0 && formatB === false) it.o[i] = 0; }
+    if (it.m != null || it.y != null || Object.keys(it.o).length) any = true;
+    return it;
+  }
+  rows.forEach(function (r) {
+    if (!r) return;
+    var a = typeof r[0] === "string" ? r[0] : "", t = a.trim(), lower = t.toLowerCase();
+    if (!t) {
+      var hasNum = r.slice(1, 15).some(function (v) { return num(v) != null; });
+      if (!hasNum || !(sec === "inc" || sec === "out" || sec === "sav")) return;
+    }
+    if (lower === "einnahmen") { sec = "inc"; prevMarker = false; return; }
+    if (lower === "gehalt-varianten") { sec = "gv"; return; }
+    if (lower === "ausgaben") { sec = "out"; prevMarker = false; return; }
+    if (lower.indexOf("sparen & investieren") === 0) { sec = "sav"; return; }
+    if (lower === "monatsübersicht" || lower.indexOf("übrig") === 0 || lower.indexOf("sparquote") === 0) { sec = lower === "monatsübersicht" ? "skip" : sec; return; }
+    if (lower === "position") { prevMarker = true; return; }
+    if (lower.indexOf("neue zeile") >= 0) { prevMarker = true; return; }
+    if (lower.indexOf("summe") === 0) { if (sec === "out" && formatB) prevMarker = false; return; }
+    if (lower.indexOf("gehaltsvariante") === 0 || lower === "variante je monat") { selNames = r.slice(3, 15); return; }
+    if (sec === "gv") {
+      if (lower === "bestandteil") { gvNames = [r[1], r[2], r[3]].map(function (x) { return x == null ? "" : String(x); }); return; }
+      if (lower.indexOf("auszahlung") === 0) return;
+      if (r[1] !== undefined && typeof r[1] === "string" && !gvNames) return;
+      gvParts.push({ name: t, v: [num(r[1]), num(r[2]), num(r[3])] });
+      return;
+    }
+    if (sec === "inc") {
+      if (lower === "gehalt") { salaryRow = r; return; }
+      d.income.push(mkItem(r, t)); return;
+    }
+    if (sec === "sav") { d.savings.push(mkItem(r, t)); return; }
+    if (sec === "out") {
+      var isHeader = !!t && (formatB ? prevMarker : !/^\s/.test(a));
+      prevMarker = false;
+      if (isHeader) { group = { id: uid(), name: t.replace(/^[^\wÄÖÜäöü]+\s*/, "") || t, items: [] }; d.groups.push(group); return; }
+      if (!group) { group = { id: uid(), name: "Ausgaben", items: [] }; d.groups.push(group); }
+      group.items.push(mkItem(r, t));
+    }
+  });
+  // Gehalt-Varianten
+  var names = gvNames || ["Regulär", "Mit Frei", "Urlaub"];
+  d.variants = names.map(function (nm, vi) {
+    return { name: nm || "Variante " + (vi + 1), parts: gvParts.map(function (p) { return { id: uid(), name: p.name, v: p.v[vi] }; }) };
+  });
+  if (!gvParts.length) d.variants.forEach(function (v) { v.parts = [{ id: uid(), name: "Grundgehalt (netto)", v: null }]; });
+  if (gvParts.some(function (p) { return p.v.some(function (x) { return x != null; }); })) any = true;
+  if (selNames) d.salary.sel = d.salary.sel.map(function (_, i) { var k = names.indexOf(String(selNames[i] || "")); return k < 0 ? 0 : k; });
+  if (salaryRow) {
+    d.salary.m = num(salaryRow[1]); d.salary.y = num(salaryRow[2]);
+    var vt = variantTotals(d);
+    for (var i = 0; i < 12; i++) {
+      var v = num(salaryRow[3 + i]), e = vt[d.salary.sel[i]] > 0 ? vt[d.salary.sel[i]] : (d.salary.y ? d.salary.y / 12 : (d.salary.m || 0));
+      if (v != null && Math.abs(v - e) > 0.005) d.salary.o[i] = v;
+    }
+    if (d.salary.m != null || d.salary.y != null || Object.keys(d.salary.o).length) any = true;
+  }
+  // nicht benutzte Leerzeilen weglassen
+  function used(it) { return it.name || it.m != null || it.y != null || Object.keys(it.o).length; }
+  d.income = d.income.filter(used); d.savings = d.savings.filter(used);
+  d.groups.forEach(function (g) { g.items = g.items.filter(used); });
+  normYear(d);
+  return any ? d : null;
+}
+document.getElementById("xlsxLoad").addEventListener("change", async function (e) {
+  var f = e.target.files && e.target.files[0]; if (!f) return;
+  e.target.value = "";
+  setStatus("Excel-Datei wird gelesen …");
+  try {
+    var sheets = await readWorkbook(await f.arrayBuffer()), found = {}, n = 0, fromBackup = false;
+    var bk = sheets.find(function (sh) { return String(sh.name).trim().toLowerCase() === "sicherung"; });
+    if (bk) bk.rows.forEach(function (r) {
+      if (!r || r[0] == null || typeof r[1] !== "string") return;
+      var y = +String(r[0]).trim(); if (!(y >= Y0 && y <= Y1)) return;
+      try { var d = JSON.parse(r[1]); if (d && d.groups && d.salary) { found[y] = d; n++; fromBackup = true; } } catch (x) {}
+    });
+    if (!fromBackup) sheets.forEach(function (sh) {
+      var y = +String(sh.name).trim();
+      if (!/^\d{4}$/.test(String(sh.name).trim()) || y < Y0 || y > Y1) return;
+      var d = sheetToYear(sh.rows); if (d) { found[y] = d; n++; }
+    });
+    if (!n) { setStatus("In dieser Excel-Datei wurden keine Jahresblätter mit Beträgen gefunden (Blattnamen wie »2026«).", true); return; }
+    var before = clone(saved);
+    Object.keys(found).forEach(function (y) { saved[y] = found[y]; });
+    derivedCache = {}; setYear(year); scheduleSave();
+    setStatus("Excel importiert" + (fromBackup ? " (aus dem Blatt »Sicherung«, 1:1)" : "") + ": " + n + " Jahr" + (n === 1 ? "" : "e") + ". Zum dauerhaften Aufheben »Sicherung speichern«.");
+    toast("Excel importiert", function () { saved = before; derivedCache = {}; setYear(year); scheduleSave(); });
+  } catch (x) {
+    setStatus(x && x.message === "deflate" ? "Dieser Browser kann die Excel-Datei nicht entpacken. Bitte Safari/Chrome aktualisieren." : "Die Excel-Datei konnte nicht gelesen werden.", true);
+  }
+});
+
+var lastW = 0;
+window.addEventListener("resize", function () { var w = document.getElementById("chart").clientWidth; if (Math.abs(w - lastW) > 20) { lastW = w; drawChart(compute(cur)); } });
+
+setYear(year);
+setStatus("Lädt …");
+initStore();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); }); }
+</script>
+</body>
+</html>
